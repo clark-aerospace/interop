@@ -1,5 +1,6 @@
 """Model for an access log."""
 
+import functools
 import logging
 import numpy as np
 from django.conf import settings
@@ -9,7 +10,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-class AccessLog(models.Model):
+class AccessLogMixin(models.Model):
     """Base class which logs access of information."""
     # The user which accessed the data.
     user = models.ForeignKey(
@@ -22,7 +23,7 @@ class AccessLog(models.Model):
         index_together = (('user', 'timestamp'), )
 
     def __init__(self, *args, **kwargs):
-        super(AccessLog, self).__init__(*args, **kwargs)
+        super(AccessLogMixin, self).__init__(*args, **kwargs)
         if self.timestamp is None:
             self.timestamp = timezone.now()
 
@@ -61,7 +62,7 @@ class AccessLog(models.Model):
     def by_time_period(cls, user, time_periods):
         """Gets a list of time-sorted lists of access logs for each time period.
 
-        The method returns the full sets of AccessLogs for each TimePeriod. If
+        The method returns the full sets of AccessLogMixins for each TimePeriod. If
         overlapping TimePeriods are provided, the results may contain duplicate
         logs.
 
@@ -69,8 +70,8 @@ class AccessLog(models.Model):
             user: The user to get the access log for.
             time_periods: A list of TimePeriod objects.
         Returns:
-            A list of AccessLog lists, where each AccessLog list contains all
-            AccessLogs corresponding to the related TimePeriod.
+            A list of AccessLogMixin lists, where each AccessLogMixin list contains all
+            AccessLogMixins corresponding to the related TimePeriod.
         """
         return [cls.by_user(user, p.start, p.end) for p in time_periods]
 
@@ -83,10 +84,10 @@ class AccessLog(models.Model):
             time_periods: A list of TimePeriod objects. Note: to avoid
                 computing rates with duplicate logs, ensure that all
                 time periods are non-overlapping.
-            time_period_logs: Optional. A list of AccessLog lists, where each
-                AccessLog list contains all AccessLogs corresponding to the
-                related TimePeriod. If None, will obtain by calling
-                by_time_period().
+            time_period_logs: Optional. A sequence of AccessLogMixin sequences,
+                where each AccessLogMixin sequence contains all AccessLogMixins
+                corresponding to the related TimePeriod. If None, will obtain
+                by calling by_time_period().
         Returns:
             A (max, avg) tuple. The max is the max time between logs, and avg
             is the avg time between logs.
@@ -95,44 +96,27 @@ class AccessLog(models.Model):
         if not time_periods:
             return (None, None)
 
+        # Check that all time periods are closed.
+        for time_period in time_periods:
+            if time_period.duration() is None:
+                return (None, None)
+
         # If logs were not provided, obtain.
         if not time_period_logs:
             time_period_logs = cls.by_time_period(user, time_periods)
 
-        # Calculate time between log files.
-        times_between_logs = []
-        for i, period in enumerate(time_periods):
-            # Get the logs for this period
-            # Coerce the QuerySet into a list, so we can use negative indexing.
-            logs = list(time_period_logs[i])
+        # Utility generator for time durations.
+        def time_between_logs(time_periods, time_period_logs):
+            for ix, period in enumerate(time_periods):
+                prev_time = period.start
+                for log in time_period_logs[ix]:
+                    yield (log.timestamp - prev_time).total_seconds()
+                    prev_time = log.timestamp
+                yield (period.end - prev_time).total_seconds()
 
-            # Account for a time period with no logs
-            if len(logs) == 0:
-                if period.start is not None and period.end is not None:
-                    time_diff = (period.end - period.start).total_seconds()
-                    times_between_logs.append(time_diff)
-                continue
-
-            # Account for time between takeoff and first log
-            if period.start is not None:
-                first = logs[0]
-                time_diff = (first.timestamp - period.start).total_seconds()
-                times_between_logs.append(time_diff)
-
-            # Account for time between logs
-            for j, log in enumerate(logs[:-1]):
-                nextlog = logs[j + 1]
-                time_diff = (nextlog.timestamp - log.timestamp).total_seconds()
-                times_between_logs.append(time_diff)
-
-            # Account for time between last log and landing
-            if period.end is not None:
-                last_log = logs[-1]
-                time_diff = (period.end - last_log.timestamp).total_seconds()
-                times_between_logs.append(time_diff)
-
-        # Compute rates using the time between log files.
-        times_between_logs = np.array(times_between_logs)
-        times_between_max = float(np.max(times_between_logs))
-        times_between_avg = float(np.mean(times_between_logs))
-        return (times_between_max, times_between_avg)
+        # Calculate max, sum, count for time durations.
+        (m, s, c) = functools.reduce(
+            lambda r, d: (max(r[0], d), r[1] + d, r[2] + 1),
+            time_between_logs(time_periods, time_period_logs), (0.0, 0.0, 0))
+        # Convert to max and average.
+        return (m, s / c)

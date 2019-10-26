@@ -49,19 +49,19 @@ class TestTeamsView(TestCase):
         pos.latitude = 10
         pos.longitude = 100
         pos.save()
-        apos = AerialPosition()
-        apos.altitude_msl = 1000
-        apos.gps_position = pos
-        apos.save()
         wpt = Waypoint()
-        wpt.position = apos
         wpt.order = 10
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 1000
         wpt.save()
         self.mission = MissionConfig()
         self.mission.home_pos = pos
+        self.mission.lost_comms_pos = pos
         self.mission.emergent_last_known_pos = pos
         self.mission.off_axis_odlc_pos = pos
         self.mission.air_drop_pos = pos
+        self.mission.ugv_drive_pos = pos
         self.mission.save()
         self.mission.mission_waypoints.add(wpt)
         self.mission.search_grid_points.add(wpt)
@@ -83,14 +83,12 @@ class TestTeamsView(TestCase):
         # user2 is active
         self.timestamp = timezone.now()
 
-        gps = GpsPosition(latitude=38.6462, longitude=-76.2452)
-        gps.save()
-
-        pos = AerialPosition(gps_position=gps, altitude_msl=0)
-        pos.save()
-
         self.telem = UasTelemetry(
-            user=self.user2, uas_position=pos, uas_heading=90)
+            user=self.user2,
+            latitude=38.6462,
+            longitude=-76.2452,
+            altitude_msl=0,
+            uas_heading=90)
         self.telem.save()
         self.telem.timestamp = dateutil.parser.parse(
             u'2016-10-01T00:00:00.0+00:00')
@@ -98,14 +96,14 @@ class TestTeamsView(TestCase):
         self.telem.save()
 
     def test_normal_user(self):
-        """Normal users not allowed access."""
+        """Normal users allowed access."""
         user = User.objects.create_user('testuser', 'email@example.com',
                                         'testpass')
         user.save()
         self.client.force_login(user)
 
         response = self.client.get(teams_url)
-        self.assertEqual(403, response.status_code)
+        self.assertEqual(200, response.status_code)
 
     def test_no_users(self):
         """No users results in empty list, no superusers."""
@@ -131,11 +129,13 @@ class TestTeamsView(TestCase):
         self.assertEqual(2, len(data))
 
         for user in data:
-            self.assertIn('id', user)
             self.assertIn('team', user)
+            self.assertIn('id', user['team'])
             self.assertIn('username', user['team'])
             self.assertIn('inAir', user)
             if 'telemetry' in user:
+                self.assertIn('telemetryId', user)
+                self.assertIn('telemetryAgeSec', user)
                 self.assertIn('telemetryTimestamp', user)
 
     def test_users_correct(self):
@@ -163,6 +163,8 @@ class TestTeamsView(TestCase):
             u'altitude': 0.0,
             u'heading': 90.0,
         }, user2['telemetry'])
+        self.assertEqual(int(user2['telemetryId']), self.telem.pk)
+        self.assertGreater(user2['telemetryAgeSec'], 0)
         self.assertEqual(user2['telemetryTimestamp'],
                          u'2016-10-01T00:00:00+00:00')
 

@@ -29,19 +29,19 @@ class TestOdlc(TestCase):
         pos.latitude = 10
         pos.longitude = 100
         pos.save()
-        apos = AerialPosition()
-        apos.altitude_msl = 1000
-        apos.gps_position = pos
-        apos.save()
         wpt = Waypoint()
-        wpt.position = apos
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 1000
         wpt.order = 10
         wpt.save()
         self.mission = MissionConfig()
         self.mission.home_pos = pos
+        self.mission.lost_comms_pos = pos
         self.mission.emergent_last_known_pos = pos
         self.mission.off_axis_odlc_pos = pos
         self.mission.air_drop_pos = pos
+        self.mission.ugv_drive_pos = pos
         self.mission.save()
         self.mission.mission_waypoints.add(wpt)
         self.mission.search_grid_points.add(wpt)
@@ -50,8 +50,8 @@ class TestOdlc(TestCase):
     def test_valid(self):
         """Test creating a valid odlc."""
         with open(
-                os.path.join(settings.BASE_DIR,
-                             'auvsi_suas/fixtures/testdata/S.jpg'), 'rb') as f:
+                os.path.join(settings.BASE_DIR, 'auvsi_suas/testdata/S.jpg'),
+                'rb') as f:
             thumb = SimpleUploadedFile('thumb.jpg', f.read())
 
         l = GpsPosition(latitude=38, longitude=-76)
@@ -64,7 +64,7 @@ class TestOdlc(TestCase):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test odlc',
@@ -123,7 +123,7 @@ class TestOdlc(TestCase):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test odlc',
@@ -137,7 +137,7 @@ class TestOdlc(TestCase):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test other odlc',
@@ -190,7 +190,7 @@ class TestOdlc(TestCase):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test odlc',
@@ -204,7 +204,7 @@ class TestOdlc(TestCase):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test other odlc',
@@ -219,20 +219,9 @@ class TestOdlc(TestCase):
         t1.save()
         self.assertAlmostEqual(3.0 / 5.0, t1.similar_classifications_ratio(t2))
         t1.shape = interop_api_pb2.Odlc.CIRCLE
-        t1.background_color = interop_api_pb2.Odlc.ORANGE
+        t1.shape_color = interop_api_pb2.Odlc.ORANGE
         t1.save()
         self.assertAlmostEqual(1.0 / 5.0, t1.similar_classifications_ratio(t2))
-
-        # Test different types.
-        t1.odlc_type = interop_api_pb2.Odlc.OFF_AXIS
-        t1.save()
-        self.assertAlmostEqual(0, t1.similar_classifications_ratio(t2))
-
-        # Test off_axis is same as standard.
-        t2.odlc_type = interop_api_pb2.Odlc.OFF_AXIS
-        t2.alphanumeric = 'DEF'
-        t2.save()
-        self.assertAlmostEqual(2.0 / 5.0, t1.similar_classifications_ratio(t2))
 
         # Test emergent type based on description approval.
         t1.odlc_type = interop_api_pb2.Odlc.EMERGENT
@@ -322,19 +311,17 @@ class TestOdlc(TestCase):
             user=self.user, mission=self.mission, uas_in_air=False)
         event.save()
 
-        # t7 with actionable_override set.
+        # t7 which is not actionable.
         event = TakeoffOrLandingEvent(
             user=self.user, mission=self.mission, uas_in_air=True)
-        event.save()
-        event = TakeoffOrLandingEvent(
-            user=self.user, mission=self.mission, uas_in_air=False)
         event.save()
         t7 = Odlc(
             mission=self.mission,
             user=self.user,
-            odlc_type=interop_api_pb2.Odlc.STANDARD,
-            actionable_override=True)
-        t7.save()
+            odlc_type=interop_api_pb2.Odlc.STANDARD)
+        event = TakeoffOrLandingEvent(
+            user=self.user, mission=self.mission, uas_in_air=False)
+        event.save()
 
         flights = TakeoffOrLandingEvent.flights(self.mission, self.user)
 
@@ -344,7 +331,7 @@ class TestOdlc(TestCase):
         self.assertFalse(t4.actionable_submission(flights))
         self.assertFalse(t5.actionable_submission(flights))
         self.assertFalse(t6.actionable_submission(flights))
-        self.assertTrue(t7.actionable_submission(flights))
+        self.assertFalse(t7.actionable_submission(flights))
 
 
 class TestOdlcEvaluator(TestCase):
@@ -371,19 +358,19 @@ class TestOdlcEvaluator(TestCase):
         pos.latitude = 10
         pos.longitude = 100
         pos.save()
-        apos = AerialPosition()
-        apos.altitude_msl = 1000
-        apos.gps_position = pos
-        apos.save()
         wpt = Waypoint()
-        wpt.position = apos
         wpt.order = 10
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 1000
         wpt.save()
         self.mission = MissionConfig()
         self.mission.home_pos = pos
+        self.mission.lost_comms_pos = pos
         self.mission.emergent_last_known_pos = pos
         self.mission.off_axis_odlc_pos = pos
         self.mission.air_drop_pos = pos
+        self.mission.ugv_drive_pos = pos
         self.mission.save()
         self.mission.mission_waypoints.add(wpt)
         self.mission.search_grid_points.add(wpt)
@@ -401,7 +388,7 @@ class TestOdlcEvaluator(TestCase):
             location=l1,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Submit test odlc 1',
@@ -416,7 +403,7 @@ class TestOdlcEvaluator(TestCase):
             location=l1,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Real odlc 1')
@@ -430,7 +417,7 @@ class TestOdlcEvaluator(TestCase):
             location=l1,
             orientation=interop_api_pb2.Odlc.N,
             shape=interop_api_pb2.Odlc.CIRCLE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             # alphanumeric set below
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Submit test odlc 2',
@@ -444,7 +431,7 @@ class TestOdlcEvaluator(TestCase):
             location=l2,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.TRIANGLE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Real test odlc 2')
@@ -458,7 +445,7 @@ class TestOdlcEvaluator(TestCase):
             location=l4,
             orientation=interop_api_pb2.Odlc.NW,
             shape=interop_api_pb2.Odlc.PENTAGON,
-            background_color=interop_api_pb2.Odlc.GRAY,
+            shape_color=interop_api_pb2.Odlc.GRAY,
             alphanumeric='XYZ',
             alphanumeric_color=interop_api_pb2.Odlc.ORANGE,
             description='Incorrect description',
@@ -471,7 +458,7 @@ class TestOdlcEvaluator(TestCase):
             odlc_type=interop_api_pb2.Odlc.STANDARD,
             orientation=interop_api_pb2.Odlc.E,
             shape=interop_api_pb2.Odlc.SEMICIRCLE,
-            background_color=interop_api_pb2.Odlc.YELLOW,
+            shape_color=interop_api_pb2.Odlc.YELLOW,
             alphanumeric='LMN',
             # alphanumeric_color set below
             location=l3,
@@ -503,7 +490,7 @@ class TestOdlcEvaluator(TestCase):
             odlc_type=interop_api_pb2.Odlc.STANDARD,
             orientation=interop_api_pb2.Odlc.N,
             shape=interop_api_pb2.Odlc.TRAPEZOID,
-            background_color=interop_api_pb2.Odlc.PURPLE,
+            shape_color=interop_api_pb2.Odlc.PURPLE,
             alphanumeric='PQR',
             alphanumeric_color=interop_api_pb2.Odlc.BLUE,
             description='Test odlc 5',
@@ -517,7 +504,7 @@ class TestOdlcEvaluator(TestCase):
             location=l1,
             orientation=interop_api_pb2.Odlc.N,
             shape=interop_api_pb2.Odlc.TRAPEZOID,
-            background_color=interop_api_pb2.Odlc.PURPLE,
+            shape_color=interop_api_pb2.Odlc.PURPLE,
             alphanumeric='PQR',
             alphanumeric_color=interop_api_pb2.Odlc.BLUE,
             description='Test odlc 5')
@@ -586,7 +573,7 @@ class TestOdlcEvaluator(TestCase):
             e.evaluate_match(self.submit1, self.real1).score_ratio,
             places=3)
         self.assertAlmostEqual(
-            0.201,
+            0.3481,
             e.evaluate_match(self.submit2, self.real2).score_ratio,
             places=3)
         self.assertAlmostEqual(
@@ -606,16 +593,16 @@ class TestOdlcEvaluator(TestCase):
             e.evaluate_match(self.submit6, self.real6).score_ratio,
             places=3)
         self.assertAlmostEqual(
-            0.04,
+            0.08,
             e.evaluate_match(self.submit7, self.real1).score_ratio,
             places=3)
 
         self.assertAlmostEqual(
-            0.741,
+            0.628,
             e.evaluate_match(self.submit1, self.real2).score_ratio,
             places=3)
         self.assertAlmostEqual(
-            0.42,
+            0.64,
             e.evaluate_match(self.submit2, self.real1).score_ratio,
             places=3)
 
@@ -660,10 +647,10 @@ class TestOdlcEvaluator(TestCase):
         self.assertAlmostEqual(
             0.270, td[self.real2.pk].geolocation_score_ratio, places=3)
         self.assertEqual(0.0, td[self.real2.pk].actionable_score_ratio)
-        self.assertAlmostEqual(0.201, td[self.real2.pk].score_ratio, places=3)
+        self.assertAlmostEqual(0.3481, td[self.real2.pk].score_ratio, places=3)
 
         self.assertEqual(True, td[self.real6.pk].description_approved)
-        self.assertAlmostEqual(0.350, d.score_ratio, places=3)
+        self.assertAlmostEqual(0.375, d.score_ratio, places=3)
         self.assertEqual(2, d.unmatched_odlc_count)
 
     def test_evaluate_no_submitted_odlcs(self):

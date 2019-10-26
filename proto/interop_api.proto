@@ -13,33 +13,77 @@ message Credentials {
     optional string password = 2;
 }
 
+// Identifier for a team.
+message TeamId {
+    // The ID of the team.
+    optional int32 id = 1;
+
+    // Interop username for the team.
+    optional string username = 2;
+
+    // Name of the team.
+    optional string name = 3;
+
+    // University the team represents.
+    optional string university = 4;
+}
+
+// Status of a team.
+message TeamStatus {
+    // The team this status describes.
+    optional TeamId team = 1;
+
+    // Whether the team is marked in air by admin.
+    optional bool in_air = 2;
+
+    // Most recent telemetry position, if it exists.
+    optional Telemetry telemetry = 3;
+
+    // ID of the telemetry.
+    optional int64 telemetry_id = 4;
+
+    // Age of the telemetry (time since uploaded to interop).
+    optional double telemetry_age_sec = 5;
+
+    // Timestamp of the telemetry as an ISO string.
+    optional string telemetry_timestamp = 6;
+}
+
 // Details for a mission.
 message Mission {
     // Unique identifier for the mission.
     // Required.
     optional int32 id = 1;
-
+    // Lost comms position for RTH/RTL and flight termination.
+    // Required.
+    optional Position lost_comms_pos = 2;
     // Valid areas to fly. A team is out of bounds if not contained within.
     // Required. At least one FlyZone must be provided.
-    repeated FlyZone fly_zones = 2;
+    repeated FlyZone fly_zones = 3;
     // Sequence of waypoints teams must fly.
     // Required. At least on Waypoint must be provided.
-    repeated Position waypoints = 3;
+    repeated Position waypoints = 4;
     // Search grid containing ODLCs. Positions define a closed polygon.
     // Required. Will form a polygon, so at least 3 points must be provided.
-    repeated Position search_grid_points = 4;
+    repeated Position search_grid_points = 5;
     // Position of the off-axis ODLC.
     // Required.
-    optional Position off_axis_odlc_pos = 5;
+    optional Position off_axis_odlc_pos = 6;
     // Last known position of the emergent ODLC.
     // Required.
-    optional Position emergent_last_known_pos = 6;
+    optional Position emergent_last_known_pos = 7;
+    // Boundary for the air drop and UGV drive.
+    // Required.
+    repeated Position air_drop_boundary_points = 8;
     // Position of the air drop location.
     // Required.
-    optional Position air_drop_pos = 7;
+    optional Position air_drop_pos = 9;
+    // Position the UGV must drive to.
+    // Required.
+    optional Position ugv_drive_pos = 10;
     // Stationary obstacles.
     // Required.
-    repeated StationaryObstacle stationary_obstacles = 8;
+    repeated StationaryObstacle stationary_obstacles = 11;
 }
 
 // Valid area to fly. Defined by a polygon and two altitude bounds. A position
@@ -117,11 +161,9 @@ message Odlc {
     // Type of the ODLC.
     // Required.
     enum Type {
-        // Standard and off axis ODLCs take latitude, longitude, orientation,
-        // shape and color, alphanumeric and color, and if processed
-        // autonomously.
+        // Standard ODLCs take latitude, longitude, orientation, shape and
+        // color, alphanumeric and color, and if processed autonomously.
         STANDARD = 1;
-        OFF_AXIS = 3;
         // Emergent takes latitude, longitude, description, and if process
         // autonomously.
         EMERGENT = 4;

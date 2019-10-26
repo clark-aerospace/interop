@@ -49,8 +49,8 @@ def odlc_to_proto(odlc):
         odlc_proto.shape = odlc.shape
     if odlc.alphanumeric:
         odlc_proto.alphanumeric = odlc.alphanumeric
-    if odlc.background_color is not None:
-        odlc_proto.shape_color = odlc.background_color
+    if odlc.shape_color is not None:
+        odlc_proto.shape_color = odlc.shape_color
     if odlc.alphanumeric_color is not None:
         odlc_proto.alphanumeric_color = odlc.alphanumeric_color
     if odlc.description:
@@ -126,9 +126,9 @@ def update_odlc_from_proto(odlc, odlc_proto):
         odlc.alphanumeric = ''
 
     if odlc_proto.HasField('shape_color'):
-        odlc.background_color = odlc_proto.shape_color
+        odlc.shape_color = odlc_proto.shape_color
     else:
-        odlc.background_color = None
+        odlc.shape_color = None
 
     if odlc_proto.HasField('alphanumeric_color'):
         odlc.alphanumeric_color = odlc_proto.alphanumeric_color
@@ -316,7 +316,7 @@ class OdlcsIdImage(View):
         except ValueError as e:
             return HttpResponseForbidden(str(e))
 
-        if not odlc.thumbnail.name:
+        if not odlc.thumbnail or not odlc.thumbnail.name:
             return HttpResponseNotFound('Odlc %s has no image' % pk)
 
         # Tell sendfile to serve the thumbnail.
@@ -433,11 +433,7 @@ class OdlcsAdminReview(View):
     def get(self, request):
         """Gets all of the odlcs ready for review."""
         # Get all odlcs which have a thumbnail to review.
-        odlcs = []
-        for user in User.objects.all():
-            odlcs.extend([
-                t for t in Odlc.objects.filter(user=user).all() if t.thumbnail
-            ])
+        odlcs = [t for t in Odlc.objects.all() if t.thumbnail]
 
         # Sort odlcs by last edit time.
         odlcs.sort(key=lambda t: t.last_modified_time)

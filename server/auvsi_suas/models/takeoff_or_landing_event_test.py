@@ -7,10 +7,10 @@ from auvsi_suas.models.mission_config import MissionConfig
 from auvsi_suas.models.takeoff_or_landing_event import TakeoffOrLandingEvent
 from auvsi_suas.models.time_period import TimePeriod
 from auvsi_suas.models.waypoint import Waypoint
-from auvsi_suas.models.access_log_test import TestAccessLogCommon
+from auvsi_suas.models.access_log_test import TestAccessLogMixinCommon
 
 
-class TestTakeoffOrLandingEventModel(TestAccessLogCommon):
+class TestTakeoffOrLandingEventModel(TestAccessLogMixinCommon):
     """Tests the TakeoffOrLandingEvent model."""
 
     def setUp(self):
@@ -22,18 +22,23 @@ class TestTakeoffOrLandingEventModel(TestAccessLogCommon):
         pos.longitude = 100
         pos.save()
         apos = AerialPosition()
+        apos.latitude = 10
+        apos.longitude = 100
         apos.altitude_msl = 1000
-        apos.gps_position = pos
         apos.save()
         wpt = Waypoint()
-        wpt.position = apos
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 1000
         wpt.order = 10
         wpt.save()
         self.mission = MissionConfig()
         self.mission.home_pos = pos
+        self.mission.lost_comms_pos = pos
         self.mission.emergent_last_known_pos = pos
         self.mission.off_axis_odlc_pos = pos
         self.mission.air_drop_pos = pos
+        self.mission.ugv_drive_pos = pos
         self.mission.save()
         self.mission.mission_waypoints.add(wpt)
         self.mission.search_grid_points.add(wpt)
@@ -42,9 +47,11 @@ class TestTakeoffOrLandingEventModel(TestAccessLogCommon):
         # Mission 2
         self.mission2 = MissionConfig()
         self.mission2.home_pos = pos
+        self.mission2.lost_comms_pos = pos
         self.mission2.emergent_last_known_pos = pos
         self.mission2.off_axis_odlc_pos = pos
         self.mission2.air_drop_pos = pos
+        self.mission2.ugv_drive_pos = pos
         self.mission2.save()
         self.mission2.mission_waypoints.add(wpt)
         self.mission2.search_grid_points.add(wpt)

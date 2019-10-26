@@ -31,6 +31,7 @@ from django.http import HttpResponseBadRequest
 from django.http import HttpResponseForbidden
 from django.http import HttpResponseNotFound
 from django.http import HttpResponseServerError
+from django.template.loader import get_template
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
@@ -53,28 +54,28 @@ def mission_proto(mission):
     mission_proto = interop_api_pb2.Mission()
     mission_proto.id = mission.pk
 
-    for fly_zone in mission.fly_zones.select_related().all():
+    mission_proto.lost_comms_pos.latitude = mission.lost_comms_pos.latitude
+    mission_proto.lost_comms_pos.longitude = mission.lost_comms_pos.latitude
+
+    for fly_zone in mission.fly_zones.all():
         fly_zone_proto = mission_proto.fly_zones.add()
         fly_zone_proto.altitude_min = fly_zone.altitude_msl_min
         fly_zone_proto.altitude_max = fly_zone.altitude_msl_max
-        for boundary_point in fly_zone.boundary_pts.order_by(
-                'order').select_related().all():
+        for boundary_point in fly_zone.boundary_pts.order_by('order').all():
             boundary_proto = fly_zone_proto.boundary_points.add()
-            boundary_proto.latitude = boundary_point.position.gps_position.latitude
-            boundary_proto.longitude = boundary_point.position.gps_position.longitude
+            boundary_proto.latitude = boundary_point.latitude
+            boundary_proto.longitude = boundary_point.longitude
 
-    for waypoint in mission.mission_waypoints.order_by(
-            'order').select_related().all():
+    for waypoint in mission.mission_waypoints.order_by('order').all():
         waypoint_proto = mission_proto.waypoints.add()
-        waypoint_proto.latitude = waypoint.position.gps_position.latitude
-        waypoint_proto.longitude = waypoint.position.gps_position.longitude
-        waypoint_proto.altitude = waypoint.position.altitude_msl
+        waypoint_proto.latitude = waypoint.latitude
+        waypoint_proto.longitude = waypoint.longitude
+        waypoint_proto.altitude = waypoint.altitude_msl
 
-    for search_point in mission.search_grid_points.order_by(
-            'order').select_related().all():
+    for search_point in mission.search_grid_points.order_by('order').all():
         search_point_proto = mission_proto.search_grid_points.add()
-        search_point_proto.latitude = search_point.position.gps_position.latitude
-        search_point_proto.longitude = search_point.position.gps_position.longitude
+        search_point_proto.latitude = search_point.latitude
+        search_point_proto.longitude = search_point.longitude
 
     mission_proto.off_axis_odlc_pos.latitude = mission.off_axis_odlc_pos.latitude
     mission_proto.off_axis_odlc_pos.longitude = mission.off_axis_odlc_pos.longitude
@@ -82,15 +83,22 @@ def mission_proto(mission):
     mission_proto.emergent_last_known_pos.latitude = mission.emergent_last_known_pos.latitude
     mission_proto.emergent_last_known_pos.longitude = mission.emergent_last_known_pos.longitude
 
+    for pt in mission.air_drop_boundary_points.order_by('order').all():
+        proto = mission_proto.air_drop_boundary_points.add()
+        proto.latitude = pt.latitude
+        proto.longitude = pt.longitude
+
     mission_proto.air_drop_pos.latitude = mission.air_drop_pos.latitude
     mission_proto.air_drop_pos.longitude = mission.air_drop_pos.longitude
 
-    stationary_obstacles = mission.stationary_obstacles.select_related().all(
-    ).order_by('pk')
+    mission_proto.ugv_drive_pos.latitude = mission.ugv_drive_pos.latitude
+    mission_proto.ugv_drive_pos.longitude = mission.ugv_drive_pos.longitude
+
+    stationary_obstacles = mission.stationary_obstacles.all()
     for obst in stationary_obstacles:
         obst_proto = mission_proto.stationary_obstacles.add()
-        obst_proto.latitude = obst.gps_position.latitude
-        obst_proto.longitude = obst.gps_position.longitude
+        obst_proto.latitude = obst.latitude
+        obst_proto.longitude = obst.longitude
         obst_proto.radius = obst.cylinder_radius
         obst_proto.height = obst.cylinder_height
 
@@ -98,14 +106,14 @@ def mission_proto(mission):
 
 
 class Missions(View):
-    """Handles requests for all missions for admins."""
+    """Handles requests for all missions."""
 
     @method_decorator(require_superuser)
     def dispatch(self, *args, **kwargs):
         return super(Missions, self).dispatch(*args, **kwargs)
 
     def get(self, request):
-        missions = MissionConfig.objects.all()
+        missions = MissionConfig.objects.select_related().all()
         out = []
         for mission in missions:
             out.append(mission_proto(mission))
@@ -124,7 +132,7 @@ class MissionsId(View):
 
     def get(self, request, pk):
         try:
-            mission = MissionConfig.objects.get(pk=pk)
+            mission = MissionConfig.objects.select_related().get(pk=pk)
         except MissionConfig.DoesNotExist:
             return HttpResponseNotFound('Mission %s not found.' % pk)
 
@@ -146,9 +154,8 @@ def fly_zone_kml(fly_zone, kml):
     pol = kml.newpolygon(name=zone_name)
     fly_zone_points = []
     for point in fly_zone.boundary_pts.order_by('order'):
-        gps = point.position.gps_position
-        coord = (gps.longitude, gps.latitude,
-                 units.feet_to_meters(point.position.altitude_msl))
+        coord = (point.longitude, point.latitude,
+                 units.feet_to_meters(point.altitude_msl))
         fly_zone_points.append(coord)
     fly_zone_points.append(fly_zone_points[0])
     pol.outerboundaryis = fly_zone_points
@@ -192,7 +199,7 @@ def mission_kml(mission, kml, kml_doc):
 
     # ODLCs.
     oldc_folder = kml_folder.newfolder(name='ODLCs')
-    for odlc in mission.odlcs.all():
+    for odlc in mission.odlcs.select_related().all():
         name = 'ODLC %d' % odlc.pk
         gps = (odlc.location.longitude, odlc.location.latitude)
         p = oldc_folder.newpoint(name=name, coords=[gps])
@@ -204,9 +211,8 @@ def mission_kml(mission, kml, kml_doc):
     linestring = waypoints_folder.newlinestring(name='Waypoints')
     waypoints = []
     for i, waypoint in enumerate(mission.mission_waypoints.order_by('order')):
-        gps = waypoint.position.gps_position
-        coord = (gps.longitude, gps.latitude,
-                 units.feet_to_meters(waypoint.position.altitude_msl))
+        coord = (waypoint.longitude, waypoint.latitude,
+                 units.feet_to_meters(waypoint.altitude_msl))
         waypoints.append(coord)
 
         # Add waypoint marker
@@ -225,9 +231,8 @@ def mission_kml(mission, kml, kml_doc):
     # Search Area
     search_area = []
     for point in mission.search_grid_points.order_by('order'):
-        gps = point.position.gps_position
-        coord = (gps.longitude, gps.latitude,
-                 units.feet_to_meters(point.position.altitude_msl))
+        coord = (point.longitude, point.latitude,
+                 units.feet_to_meters(point.altitude_msl))
         search_area.append(coord)
     if search_area:
         search_area.append(search_area[0])
@@ -241,10 +246,9 @@ def mission_kml(mission, kml, kml_doc):
     stationary_obstacles_folder = kml_folder.newfolder(
         name='Stationary Obstacles')
     for obst in mission.stationary_obstacles.all():
-        gpos = obst.gps_position
-        zone, north = distance.utm_zone(gpos.latitude, gpos.longitude)
+        zone, north = distance.utm_zone(obst.latitude, obst.longitude)
         proj = distance.proj_utm(zone, north)
-        cx, cy = proj(gpos.longitude, gpos.latitude)
+        cx, cy = proj(obst.longitude, obst.latitude)
         rm = units.feet_to_meters(obst.cylinder_radius)
         hm = units.feet_to_meters(obst.cylinder_height)
         obst_points = []
@@ -265,35 +269,34 @@ def mission_kml(mission, kml, kml_doc):
     return kml_folder
 
 
-def uas_telemetry_kml(user, flights, logs, kml, kml_doc):
+def uas_telemetry_kml(user, flight_logs, kml, kml_doc):
     """
     Appends kml nodes describing the given user's flight as described
     by the log array given.
 
     Args:
         user: A Django User to get username from
-        flights: List of flight periods
-        logs: A list of UasTelemetry elements
+        flight_logs: A sequence of UasTelemetry logs per flight period.
         kml: A simpleKML Container to which the flight data will be added
         kml_doc: The simpleKML Document to which schemas will be added
     Returns:
         None
     """
-    kml_folder = kml.newfolder(name=user.username)
+    # Lazily create folder iff there is data.
+    kml_folder = None
 
-    logs = UasTelemetry.dedupe(UasTelemetry.filter_bad(logs))
-    for i, flight in enumerate(flights):
+    for i, logs in enumerate(flight_logs):
         name = '%s Flight %d' % (user.username, i + 1)
-        flight_logs = filter(lambda x: flight.within(x.timestamp), logs)
+
+        logs = UasTelemetry.dedupe(UasTelemetry.filter_bad(logs))
 
         coords = []
         angles = []
         when = []
         for entry in logs:
-            pos = entry.uas_position.gps_position
             # Spatial Coordinates
-            coord = (pos.longitude, pos.latitude,
-                     units.feet_to_meters(entry.uas_position.altitude_msl))
+            coord = (entry.longitude, entry.latitude,
+                     units.feet_to_meters(entry.altitude_msl))
             coords.append(coord)
 
             # Time Elements
@@ -303,6 +306,14 @@ def uas_telemetry_kml(user, flights, logs, kml, kml_doc):
             # Degrees heading, tilt, and roll
             angle = (entry.uas_heading, 0.0, 0.0)
             angles.append(angle)
+
+        # Ignore tracks with no data.
+        if not coords or not angles or not when:
+            continue
+
+        # Start folder if not done so already.
+        if not kml_folder:
+            kml_folder = kml.newfolder(name=user.username)
 
         # Create a new track in the folder
         trk = kml_folder.newgxtrack(name=name)
@@ -321,7 +332,7 @@ def uas_telemetry_kml(user, flights, logs, kml, kml_doc):
 
 
 def uas_telemetry_live_kml(kml, timespan):
-    users = User.objects.all().order_by('username')
+    users = User.objects.order_by('username').all()
     for user in users:
         try:
             log = UasTelemetry.by_user(user).latest('timestamp')
@@ -331,13 +342,10 @@ def uas_telemetry_live_kml(kml, timespan):
         if log.timestamp < timezone.now() - timespan:
             continue
 
-        apos = log.uas_position
-        gpos = apos.gps_position
-
         point = kml.newpoint(
             name=user.username,
-            coords=[(gpos.longitude, gpos.latitude,
-                     units.feet_to_meters(apos.altitude_msl))])
+            coords=[(log.longitude, log.latitude,
+                     units.feet_to_meters(log.altitude_msl))])
         point.iconstyle.icon.href = KML_PLANE_ICON
         point.iconstyle.heading = log.uas_heading
         point.extrude = 1  # Extend path to ground
@@ -354,8 +362,8 @@ class ExportKml(View):
     def get(self, request):
         kml = Kml(name='AUVSI SUAS Flight Data')
         kml_missions = kml.newfolder(name='Missions')
-        users = User.objects.all()
-        for mission in MissionConfig.objects.all():
+        users = User.objects.order_by('username').all()
+        for mission in MissionConfig.objects.select_related().all():
             kml_mission = mission_kml(mission, kml_missions, kml.document)
             kml_flights = kml_mission.newfolder(name='Flights')
             for user in users:
@@ -366,8 +374,7 @@ class ExportKml(View):
                     continue
                 uas_telemetry_kml(
                     user=user,
-                    flights=flights,
-                    logs=UasTelemetry.by_user(user),
+                    flight_logs=UasTelemetry.by_time_period(user, flights),
                     kml=kml_flights,
                     kml_doc=kml.document)
 
@@ -390,7 +397,7 @@ class LiveKml(View):
     def get(self, request):
         kml = Kml(name='AUVSI SUAS LIVE Flight Data')
         kml_missions = kml.newfolder(name='Missions')
-        for mission in MissionConfig.objects.all():
+        for mission in MissionConfig.objects.select_related().all():
             mission_kml(mission, kml_missions, kml.document)
 
         parameters = '?sessionid={}'.format(request.COOKIES['sessionid'])
@@ -461,6 +468,8 @@ class Evaluate(View):
     Zip file contains a master CSV and JSON file with all evaluation data.
     It also contains per-team JSON files for individual team feedback.
     """
+
+    feedback_template = get_template('feedback.html')
 
     @method_decorator(require_superuser)
     def dispatch(self, *args, **kwargs):
@@ -537,9 +546,15 @@ class Evaluate(View):
             for team_eval in mission_eval.teams:
                 team_json = pretty_json(json_format.MessageToJson(team_eval))
                 zip_file.writestr(
-                    '/evaluate_teams/teams/%s.json' % team_eval.team,
+                    '/evaluate_teams/teams/%s.json' % team_eval.team.username,
                     team_json)
                 team_jsons.append(team_json)
+
+            zip_file.writestr('/evaluate_teams/all.html',
+                              self.feedback_template.render({
+                                  'feedbacks':
+                                  team_jsons
+                              }))
 
             zip_file.writestr('/evaluate_teams/all.csv',
                               self.csv_from_json(team_jsons))

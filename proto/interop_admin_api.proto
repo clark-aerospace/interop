@@ -4,36 +4,6 @@ syntax = "proto2";
 package auvsi_suas.proto;
 import "auvsi_suas/proto/interop_api.proto";
 
-// Identifier for a team.
-message TeamId {
-    // Interop username for the team.
-    optional string username = 1;
-
-    // Name of the team.
-    optional string name = 2;
-
-    // University the team represents.
-    optional string university = 3;
-}
-
-// Status of a team.
-message TeamStatus {
-    // ID of the team.
-    optional int32 id = 1;
-
-    // The team this status describes.
-    optional TeamId team = 2;
-
-    // Whether the team is marked in air by admin.
-    optional bool in_air = 3;
-
-    // Most recent telemetry position, if it exists.
-    optional Telemetry telemetry = 4;
-
-    // Timestamp of the telemetry position as ISO string.
-    optional string telemetry_timestamp = 5;
-}
-
 // Review details for an ODLC.
 message OdlcReview {
     // The ODLC being reviewed.
@@ -56,17 +26,20 @@ message MultiUserMissionEvaluation {
 
 // Evaluation data for a mission.
 message MissionEvaluation {
+    // The mission which this evaluation describes.
+    optional int32 mission = 1;
+
     // The team which this evaluation describes.
-    optional TeamId team = 1;
+    optional TeamId team = 2;
 
     // Warnings generated during the evaluation process.
-    repeated string warnings = 2;
+    repeated string warnings = 3;
 
     // Feedback provided to the team.
-    optional MissionFeedback feedback = 3;
+    optional MissionFeedback feedback = 4;
 
     // Scoring data.
-    optional MissionScore score = 4;
+    optional MissionScore score = 5;
 }
 
 // Data which was basis for score, provided as feedback for the team.
@@ -165,10 +138,10 @@ message MissionJudgeFeedback {
 
     // Air drop accuracy.
     enum AirDropAccuracy {
-        INSUFFICIENT_ACCURACY = 0;
+        NO_POINTS = 0;
         WITHIN_05_FT = 1;
-        WITHIN_25_FT = 2;
-        WITHIN_75_FT = 3;
+        WITHIN_15_FT = 2;
+        WITHIN_40_FT = 3;
     }
     optional AirDropAccuracy air_drop_accuracy = 11;
     // Whether the UGV drove to the specified location.
@@ -224,8 +197,6 @@ message TimelineScore {
 message AutonomousFlightScore {
     optional double score_ratio = 1;
     optional bool telemetry_prerequisite = 2;
-    optional double flight = 3;
-    optional double waypoint_capture = 4;
     optional double waypoint_accuracy = 5;
     optional double safety_pilot_takeover_penalty = 6;
     optional double out_of_bounds_penalty = 7;

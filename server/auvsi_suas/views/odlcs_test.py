@@ -5,7 +5,6 @@ import json
 import os.path
 from auvsi_suas.models.aerial_position import AerialPosition
 from auvsi_suas.models.gps_position import GpsPosition
-from auvsi_suas.models.gps_position import GpsPosition
 from auvsi_suas.models.mission_config import MissionConfig
 from auvsi_suas.models.odlc import Odlc
 from auvsi_suas.models.waypoint import Waypoint
@@ -32,19 +31,19 @@ class TestOdlcsCommon(TestCase):
         pos.latitude = 10
         pos.longitude = 100
         pos.save()
-        apos = AerialPosition()
-        apos.altitude_msl = 1000
-        apos.gps_position = pos
-        apos.save()
         wpt = Waypoint()
-        wpt.position = apos
         wpt.order = 10
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 0
         wpt.save()
         self.mission = MissionConfig()
         self.mission.home_pos = pos
+        self.mission.lost_comms_pos = pos
         self.mission.emergent_last_known_pos = pos
         self.mission.off_axis_odlc_pos = pos
         self.mission.air_drop_pos = pos
+        self.mission.ugv_drive_pos = pos
         self.mission.save()
         self.mission.mission_waypoints.add(wpt)
         self.mission.search_grid_points.add(wpt)
@@ -52,9 +51,11 @@ class TestOdlcsCommon(TestCase):
         # Mission 2
         self.mission2 = MissionConfig()
         self.mission2.home_pos = pos
+        self.mission2.lost_comms_pos = pos
         self.mission2.emergent_last_known_pos = pos
         self.mission2.off_axis_odlc_pos = pos
         self.mission2.air_drop_pos = pos
+        self.mission2.ugv_drive_pos = pos
         self.mission2.save()
         self.mission2.mission_waypoints.add(wpt)
         self.mission2.search_grid_points.add(wpt)
@@ -108,7 +109,7 @@ class TestGetOdlc(TestOdlcsCommon):
         t2 = Odlc(
             mission=self.mission,
             user=self.user,
-            odlc_type=interop_api_pb2.Odlc.OFF_AXIS)
+            odlc_type=interop_api_pb2.Odlc.STANDARD)
         t2.save()
 
         t3 = Odlc(
@@ -123,34 +124,38 @@ class TestGetOdlc(TestOdlcsCommon):
             odlc_type=interop_api_pb2.Odlc.STANDARD)
         t4.save()
 
+        get_id = lambda x: x['id']
         response = self.client.get(odlcs_url)
         self.assertEqual(200, response.status_code)
-        self.assertEqual([
-            {
-                'id': t4.pk,
-                'mission': self.mission2.pk,
-                'type': 'STANDARD',
-                'autonomous': False,
-            },
-            {
-                'id': t3.pk,
-                'mission': self.mission.pk,
-                'type': 'EMERGENT',
-                'autonomous': False,
-            },
-            {
-                'id': t2.pk,
-                'mission': self.mission.pk,
-                'type': 'OFF_AXIS',
-                'autonomous': False,
-            },
-            {
-                'id': t1.pk,
-                'mission': self.mission.pk,
-                'type': 'STANDARD',
-                'autonomous': False,
-            },
-        ], json.loads(response.content))
+        self.assertEqual(
+            sorted(
+                [
+                    {
+                        'id': t4.pk,
+                        'mission': self.mission2.pk,
+                        'type': 'STANDARD',
+                        'autonomous': False,
+                    },
+                    {
+                        'id': t3.pk,
+                        'mission': self.mission.pk,
+                        'type': 'EMERGENT',
+                        'autonomous': False,
+                    },
+                    {
+                        'id': t2.pk,
+                        'mission': self.mission.pk,
+                        'type': 'STANDARD',
+                        'autonomous': False,
+                    },
+                    {
+                        'id': t1.pk,
+                        'mission': self.mission.pk,
+                        'type': 'STANDARD',
+                        'autonomous': False,
+                    },
+                ],
+                key=get_id), sorted(json.loads(response.content), key=get_id))
 
         response = self.client.get(odlcs_url +
                                    '?mission=%d' % self.mission2.pk)
@@ -395,7 +400,7 @@ class TestPostOdlc(TestOdlcsCommon):
                 content_type='application/json')
             self.assertEqual(400, response.status_code)
 
-    def test_invalid_background_color(self):
+    def test_invalid_shape_color(self):
         """Send bad odlc background color."""
         bad = ['white black', 'mahogany', 42]
 
@@ -624,7 +629,7 @@ class TestOdlcId(TestOdlcsCommon):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test odlc')
@@ -632,7 +637,7 @@ class TestOdlcId(TestOdlcsCommon):
 
         updated = {
             'mission': self.mission.pk,
-            'type': 'OFF_AXIS',
+            'type': 'STANDARD',
             'latitude': 39,
             'longitude': -77,
             'orientation': 'N',
@@ -651,12 +656,12 @@ class TestOdlcId(TestOdlcsCommon):
         t.refresh_from_db()
         t.location.refresh_from_db()
         self.assertEqual(self.user, t.user)
-        self.assertEqual(interop_api_pb2.Odlc.OFF_AXIS, t.odlc_type)
+        self.assertEqual(interop_api_pb2.Odlc.STANDARD, t.odlc_type)
         self.assertEqual(39, t.location.latitude)
         self.assertEqual(-77, t.location.longitude)
         self.assertEqual(interop_api_pb2.Odlc.N, t.orientation)
         self.assertEqual(interop_api_pb2.Odlc.CIRCLE, t.shape)
-        self.assertEqual(interop_api_pb2.Odlc.BLACK, t.background_color)
+        self.assertEqual(interop_api_pb2.Odlc.BLACK, t.shape_color)
         self.assertEqual('A', t.alphanumeric)
         self.assertEqual(interop_api_pb2.Odlc.GREEN, t.alphanumeric_color)
         self.assertEqual('Best odlc', t.description)
@@ -673,7 +678,7 @@ class TestOdlcId(TestOdlcsCommon):
             location=l,
             orientation=interop_api_pb2.Odlc.S,
             shape=interop_api_pb2.Odlc.SQUARE,
-            background_color=interop_api_pb2.Odlc.WHITE,
+            shape_color=interop_api_pb2.Odlc.WHITE,
             alphanumeric='ABC',
             alphanumeric_color=interop_api_pb2.Odlc.BLACK,
             description='Test odlc')
@@ -694,7 +699,7 @@ class TestOdlcId(TestOdlcsCommon):
         self.assertIsNone(t.location)
         self.assertIsNone(t.orientation)
         self.assertIsNone(t.shape)
-        self.assertIsNone(t.background_color)
+        self.assertIsNone(t.shape_color)
         self.assertEqual('', t.alphanumeric)
         self.assertIsNone(t.alphanumeric_color)
         self.assertEqual('', t.description)
@@ -775,8 +780,7 @@ class TestOdlcId(TestOdlcsCommon):
 
 def test_image(name):
     """Compute path of test image"""
-    return os.path.join(settings.BASE_DIR, 'auvsi_suas/fixtures/testdata',
-                        name)
+    return os.path.join(settings.BASE_DIR, 'auvsi_suas/testdata', name)
 
 
 class TestOdlcIdImage(TestOdlcsCommon):

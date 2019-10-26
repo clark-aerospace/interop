@@ -26,18 +26,23 @@ class TestUasTelemetryBase(TestCase):
         pos.longitude = 100
         pos.save()
         apos = AerialPosition()
+        apos.latitude = 10
+        apos.longitude = 100
         apos.altitude_msl = 1000
-        apos.gps_position = pos
         apos.save()
         wpt = Waypoint()
-        wpt.position = apos
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 1000
         wpt.order = 10
         wpt.save()
         self.mission = MissionConfig()
         self.mission.home_pos = pos
+        self.mission.lost_comms_pos = pos
         self.mission.emergent_last_known_pos = pos
         self.mission.off_axis_odlc_pos = pos
         self.mission.air_drop_pos = pos
+        self.mission.ugv_drive_pos = pos
         self.mission.save()
         self.mission.mission_waypoints.add(wpt)
         self.mission.search_grid_points.add(wpt)
@@ -49,11 +54,12 @@ class TestUasTelemetryBase(TestCase):
         if user is None:
             user = self.user
 
-        pos = GpsPosition(latitude=lat, longitude=lon)
-        pos.save()
-        apos = AerialPosition(gps_position=pos, altitude_msl=alt)
-        apos.save()
-        log = UasTelemetry(user=user, uas_position=apos, uas_heading=heading)
+        log = UasTelemetry(
+            user=user,
+            latitude=lat,
+            longitude=lon,
+            altitude_msl=alt,
+            uas_heading=heading)
         log.save()
         log.timestamp = self.now + datetime.timedelta(seconds=timestamp)
         log.save()
@@ -82,17 +88,11 @@ class TestUasTelemetryBase(TestCase):
         waypoints = []
         for i, waypoint in enumerate(waypoints_data):
             (lat, lon, alt) = waypoint
-            pos = GpsPosition()
-            pos.latitude = lat
-            pos.longitude = lon
-            pos.save()
-            apos = AerialPosition()
-            apos.altitude_msl = alt
-            apos.gps_position = pos
-            apos.save()
             wpt = Waypoint()
-            wpt.position = apos
             wpt.order = i
+            wpt.latitude = lat
+            wpt.longitude = lon
+            wpt.altitude_msl = alt
             wpt.save()
             waypoints.append(wpt)
         return waypoints
@@ -101,20 +101,11 @@ class TestUasTelemetryBase(TestCase):
         """Assert two telemetry are equal."""
         msg = '%s != %s' % (expect, got)
         self.assertAlmostEqual(
-            expect.uas_position.gps_position.latitude,
-            got.uas_position.gps_position.latitude,
-            places=6,
-            msg=msg)
+            expect.latitude, got.latitude, places=6, msg=msg)
         self.assertAlmostEqual(
-            expect.uas_position.gps_position.longitude,
-            got.uas_position.gps_position.longitude,
-            places=6,
-            msg=msg)
+            expect.longitude, got.longitude, places=6, msg=msg)
         self.assertAlmostEqual(
-            expect.uas_position.altitude_msl,
-            got.uas_position.altitude_msl,
-            places=3,
-            msg=msg)
+            expect.altitude_msl, got.altitude_msl, places=3, msg=msg)
         self.assertAlmostEqual(
             expect.uas_heading, got.uas_heading, places=3, msg=msg)
 
@@ -200,18 +191,18 @@ class TestUasTelemetryFilter(TestUasTelemetryBase):
 
     def test_no_logs(self):
         """Tests empty log."""
-        self.assertEqual(UasTelemetry.dedupe([]), [])
+        self.assertSequenceEqual(list(UasTelemetry.dedupe([])), [])
 
     def test_no_duplicates(self):
         """Tests no duplicates in list."""
         orig = [self.log1, self.log2, self.log3, self.log4]
-        self.assertEqual(UasTelemetry.dedupe(orig), orig)
+        self.assertSequenceEqual(list(UasTelemetry.dedupe(orig)), orig)
 
     def test_boundary_duplicates(self):
         """Tests duplicates on the bounds of the list."""
         orig = [self.log1, self.log1, self.log2, self.log2, self.log2]
         expect = [self.log1, self.log2]
-        self.assertEqual(UasTelemetry.dedupe(orig), expect)
+        self.assertSequenceEqual(list(UasTelemetry.dedupe(orig)), expect)
 
     def test_duplicates(self):
         orig = [
@@ -219,13 +210,13 @@ class TestUasTelemetryFilter(TestUasTelemetryBase):
             self.log4
         ]
         expect = [self.log1, self.log2, self.log3, self.log4]
-        self.assertEqual(UasTelemetry.dedupe(orig), expect)
+        self.assertSequenceEqual(list(UasTelemetry.dedupe(orig)), expect)
 
     def test_filter_bad(self):
         """Tests filter_bad()."""
         orig = [self.log1, self.log5]
         expect = [self.log1]
-        self.assertEqual(list(UasTelemetry.filter_bad(orig)), expect)
+        self.assertSequenceEqual(list(UasTelemetry.filter_bad(orig)), expect)
 
 
 class TestUasTelemetryInterpolate(TestUasTelemetryBase):

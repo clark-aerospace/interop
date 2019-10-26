@@ -17,19 +17,19 @@ class TestMissionJudgeFeedback(TestCase):
         pos.latitude = 10
         pos.longitude = 100
         pos.save()
-        apos = AerialPosition()
-        apos.altitude_msl = 1000
-        apos.gps_position = pos
-        apos.save()
         wpt = Waypoint()
-        wpt.position = apos
         wpt.order = 10
+        wpt.latitude = 10
+        wpt.longitude = 100
+        wpt.altitude_msl = 1000
         wpt.save()
         config = MissionConfig()
         config.home_pos = pos
+        config.lost_comms_pos = pos
         config.emergent_last_known_pos = pos
         config.off_axis_odlc_pos = pos
         config.air_drop_pos = pos
+        config.ugv_drive_pos = pos
         config.save()
         config.mission_waypoints.add(wpt)
         config.search_grid_points.add(wpt)
@@ -45,7 +45,6 @@ class TestMissionJudgeFeedback(TestCase):
             used_timeout=True,
             min_auto_flight_time=True,
             safety_pilot_takeovers=3,
-            waypoints_captured=5,
             out_of_bounds=6,
             unsafe_out_of_bounds=7,
             things_fell_off_uas=False,
@@ -69,7 +68,6 @@ class TestMissionJudgeFeedback(TestCase):
         self.assertTrue(pb.used_timeout)
         self.assertTrue(pb.min_auto_flight_time)
         self.assertEqual(3, pb.safety_pilot_takeovers)
-        self.assertEqual(5, pb.waypoints_captured)
         self.assertEqual(6, pb.out_of_bounds)
         self.assertEqual(7, pb.unsafe_out_of_bounds)
         self.assertFalse(pb.things_fell_off_uas)

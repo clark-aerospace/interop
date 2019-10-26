@@ -38,13 +38,9 @@ BOUND_PENALTY = 0.1
 SAFETY_BOUND_PENALTY = 1.0
 # Ratio of points lost for TFOA and crash.
 TFOA_PENALTY = 0.25
-CRASH_PENALTY = 0.35
-# Weight of flight points to all autonomous flight.
-AUTONOMOUS_FLIGHT_FLIGHT_WEIGHT = 0.4
-# Weight of capture points to all autonomous flight.
-WAYPOINT_CAPTURE_WEIGHT = 0.1
+CRASH_PENALTY = 0.50
 # Weight of accuracy points to all autonomous flight.
-WAYPOINT_ACCURACY_WEIGHT = 0.5
+WAYPOINT_ACCURACY_WEIGHT = 1.0
 
 # Weight of air drop points for accuracy.
 AIR_DROP_ACCURACY_WEIGHT = 0.5
@@ -52,10 +48,10 @@ AIR_DROP_ACCURACY_WEIGHT = 0.5
 AIR_DROP_DRIVE_WEIGHT = 0.5
 # Air drop to point ratio.
 AIR_DROP_DISTANCE_POINT_RATIO = {
-    interop_admin_api_pb2.MissionJudgeFeedback.INSUFFICIENT_ACCURACY: 0,
+    interop_admin_api_pb2.MissionJudgeFeedback.NO_POINTS: 0,
     interop_admin_api_pb2.MissionJudgeFeedback.WITHIN_05_FT: 1,
-    interop_admin_api_pb2.MissionJudgeFeedback.WITHIN_25_FT: 0.5,
-    interop_admin_api_pb2.MissionJudgeFeedback.WITHIN_75_FT: 0.25,
+    interop_admin_api_pb2.MissionJudgeFeedback.WITHIN_15_FT: 0.5,
+    interop_admin_api_pb2.MissionJudgeFeedback.WITHIN_40_FT: 0.25,
 }
 
 # Scoring weights.
@@ -109,7 +105,7 @@ def generate_feedback(mission_config, user, team_eval):
     user_odlcs = Odlc.objects.filter(user=user).filter(
         mission=mission_config.pk).all()
     for odlc in user_odlcs:
-        if odlc.thumbnail_approved is None:
+        if odlc.thumbnail and odlc.thumbnail_approved is None:
             team_eval.warnings.append(
                 'Odlc thumbnail review not set, may need to review ODLCs.')
             break
@@ -178,12 +174,9 @@ def score_team(team_eval):
 
     # Score autonomous flight.
     flight = score.autonomous_flight
-    flight.flight = 1 if feedback.judge.min_auto_flight_time else 0
     flight.telemetry_prerequisite = telem_prereq
-    flight.waypoint_capture = (
-        float(feedback.judge.waypoints_captured) / len(feedback.waypoints))
-    wpt_scores = [w.score_ratio for w in feedback.waypoints]
     if telem_prereq:
+        wpt_scores = [w.score_ratio for w in feedback.waypoints]
         flight.waypoint_accuracy = sum(wpt_scores) / len(feedback.waypoints)
     else:
         flight.waypoint_accuracy = 0
@@ -200,8 +193,6 @@ def score_team(team_eval):
     else:
         flight.crashed_penalty = 0
     flight.score_ratio = (
-        AUTONOMOUS_FLIGHT_FLIGHT_WEIGHT * flight.flight +
-        WAYPOINT_CAPTURE_WEIGHT * flight.waypoint_capture +
         WAYPOINT_ACCURACY_WEIGHT * flight.waypoint_accuracy -
         flight.safety_pilot_takeover_penalty - flight.out_of_bounds_penalty -
         flight.things_fell_off_penalty - flight.crashed_penalty)
@@ -282,11 +273,24 @@ def evaluate_teams(mission_config, users=None):
     for user in sorted(users, key=lambda u: u.username):
         # Ignore admins.
         if user.is_superuser:
+            logger.info('Filtering superuser: %s.' % user.username)
+            continue
+
+        # Filter inactive users.
+        has_flights = TakeoffOrLandingEvent.objects.filter(user=user).filter(
+            mission=mission_config).exists()
+        has_odlcs = Odlc.objects.filter(user=user).filter(
+            mission=mission_config).exists()
+        has_feedback = MissionJudgeFeedback.objects.filter(user=user).filter(
+            mission=mission_config).exists()
+        if not has_flights and not has_odlcs and not has_feedback:
+            logger.info('Filtering inactive user: %s.' % user.username)
             continue
 
         # Start the evaluation data structure.
         logger.info('Evaluation starting for user: %s.' % user.username)
         team_eval = mission_eval.teams.add()
+        team_eval.mission = mission_config.pk
         team_eval.team.username = user.username
         team_eval.team.name = user.first_name
         team_eval.team.university = user.last_name
