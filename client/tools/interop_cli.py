@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # CLI for interacting with interop server.
 
 from __future__ import print_function
@@ -8,6 +8,7 @@ import getpass
 import logging
 import sys
 import time
+import asyncio
 
 from auvsi_suas.client.client import AsyncClient
 from auvsi_suas.proto.interop_api_pb2 import Telemetry
@@ -65,6 +66,13 @@ def mavlink(args, client):
     proxy = MavlinkProxy(args.device, client)
     proxy.proxy()
 
+def jsonTest(args, client):
+    mission = client.get_mission(args.mission_id).result()
+    mission_json = json_format.MessageToJson(mission)
+    mission_dictionary = json.loads(mission_json)
+
+
+    #print(mission_dictionary["waypoints"][0][latitude])
 
 def main():
     # Setup logging
@@ -149,7 +157,7 @@ forward as telemetry to interop server.''')
 
     # Create client and dispatch subcommand.
     client = AsyncClient(args.url, args.username, password)
-    args.func(args, client)
+    asyncio.run(args.func(args, client))
 
 
 if __name__ == '__main__':

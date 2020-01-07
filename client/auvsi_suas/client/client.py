@@ -297,6 +297,16 @@ class Client(object):
         """
         self.delete('/api/odlcs/%d/image' % odlc_id)
 
+    def send_mission(self, mission_id):
+        """sends mission from server to the drone.
+
+        Args:
+            mission_id: The ID of the mission to send.
+        Raises:
+            InteropError: Error from server.
+            requests.Timeout: Request timeout.
+        """
+
 
 class AsyncClient(object):
     """Client which uses the base to be more performant.
@@ -468,3 +478,14 @@ class AsyncClient(object):
             underlying Client.
         """
         return self.executor.submit(self.client.delete_odlc_image, odlc_id)
+
+    def send_mission(self, mission_id):
+        """sends mission from server to the drone.
+
+        Args:
+            mission_id: The ID of the mission to send.
+        Returns:
+            Future object which contains the return value or error
+            from the underlying Client.
+        """
+        return self.executor.submit(self.client)
