@@ -20,6 +20,13 @@ from upload_odlcs import upload_odlcs
 
 logger = logging.getLogger(__name__)
 
+async def load_mission(args, client):
+    interop_client = AsyncClient(args.interop_url,
+                     args.interop_username,
+                     args.interop_password)
+
+    await client.load_mission(args.mission_id, interop_client)
+
 def sendMission(args, client):
     interop_client = AsyncClient(args.interop_url,
                      args.interop_username,
@@ -29,11 +36,7 @@ def sendMission(args, client):
     mission_dictionary = json.loads(mission_json)
     print(mission_dictionary)
 
-def connect(args):
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(drone_client.connect(args.url))
-
-async def mission(args, client):
+async def mission(client):
     await client.mission()
     return
 
@@ -53,29 +56,32 @@ def main():
 
     subparser = subparsers.add_parser('mission', help='Send Mission.')
     subparser.set_defaults(func=mission)
-    # subparser.add_argument(
-    #     '--mission_id',
-    #     type=int,
-    #     required=True,
-    #     help='ID of the mission to get.')
-    # subparser.add_argument(
-    #     '--interop_url',
-    #     required=True,
-    #     help='url for interop server')
-    # subparser.add_argument(
-    #     '--interop_username',
-    #     required=True,
-    #     help='username for interop server')
-    # subparser.add_argument(
-    #     '--interop_password',
-    #     required=True,
-    #     help='password for interop server')          
+    
+    subparser = subparsers.add_parser('load_mission', help='Loads Mission.')
+    subparser.set_defaults(func=load_mission)
+    subparser.add_argument(
+              '--mission_id',
+              type=int,
+              required=True,
+              help='ID of the mission to get.')
+    subparser.add_argument(
+              '--interop_url',
+              required=True,
+              help='url for interop server')
+    subparser.add_argument(
+              '--interop_username',
+              required=True,
+              help='username for interop server')
+    subparser.add_argument(
+              '--interop_password',
+              required=True,
+              help='password for interop server')          
     
     args = parser.parse_args()
-    client = DroneClient(args)
-    # Create client and dispatch subcommand.
-    #client = Client(args.url)
-    asyncio.run(args.func(args, client))
+
+    #create client and send commands
+    client = DroneClient(args.url)
+    asyncio.run(args.func(client))
 
 if __name__ == '__main__':
     main()
