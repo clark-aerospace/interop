@@ -40,6 +40,11 @@ for drone_cli.py
 ```bash
 ./tools/drone_cli.py --url udp://:14540 load_mission --mission_id 1 --interop_url http://127.0.0.1:8000 --interop_username testuser --interop_password testpass
 ```
+for testing drone_client.py use unittest. <br />
+To run the test method test_load_mission().
+```bash
+python -m unittest drone_client.test_drone_client.TestClientMission.test_load_mission 
+```
 
 ## Comand syntax for drone_cli.py command line tool
 The drone_cli.py tool allways requires the devices url and then a option potentially followed by more arguments.

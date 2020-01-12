@@ -36,7 +36,7 @@ def sendMission(args, client):
     mission_dictionary = json.loads(mission_json)
     print(mission_dictionary)
 
-async def mission(client):
+async def mission(args, client):
     await client.mission()
     return
 
@@ -83,7 +83,7 @@ def main():
     client = DroneClient(args.url)
     print(client)
 
-    asyncio.run(args.func(client))
+    asyncio.run(args.func(args, client))
 
 if __name__ == '__main__':
     main()

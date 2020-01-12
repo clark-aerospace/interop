@@ -33,7 +33,6 @@ class DroneClient():
         mission = interop_client.get_mission(mission_id).result()
         mission_json = json_format.MessageToJson(mission)
         mission_dictionary = json.loads(mission_json)
-        print(mission_dictionary)
 
         mission_items = []
         for waypoint in mission_dictionary['waypoints']:
@@ -47,6 +46,8 @@ class DroneClient():
                                              MissionItem.CameraAction.NONE,
                                              float('nan'),
                                              float('nan')))
+        
+        await self.drone.mission.set_return_to_launch_after_mission(True)
 
         print("-- Uploading mission")
         await self.drone.mission.upload_mission(mission_items)
