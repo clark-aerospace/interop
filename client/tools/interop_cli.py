@@ -8,7 +8,6 @@ import getpass
 import logging
 import sys
 import time
-import asyncio
 
 from auvsi_suas.client.client import AsyncClient
 from auvsi_suas.proto.interop_api_pb2 import Telemetry
@@ -157,7 +156,7 @@ forward as telemetry to interop server.''')
 
     # Create client and dispatch subcommand.
     client = AsyncClient(args.url, args.username, password)
-    asyncio.run(args.func(args, client))
+    args.func(args, client)
 
 
 if __name__ == '__main__':

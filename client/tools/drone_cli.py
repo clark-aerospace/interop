@@ -81,6 +81,8 @@ def main():
 
     #create client and send commands
     client = DroneClient(args.url)
+    print(client)
+
     asyncio.run(args.func(client))
 
 if __name__ == '__main__':

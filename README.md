@@ -1,3 +1,64 @@
+# Clark College Interop details
+
+## Instructions on how to establish connections between mavproxy, QGround control, Gazebo, PX4, the AUVSI interop server, and this interop client for testing
+
+### These isntructions assume that you have succesfully installed all dependencies. If it is requested I can add more instruction.
+
+navigate to the AUVSI interop server directory
+```bash
+cd interop/server
+```
+start the interop test server
+```bash
+./interop-server.sh up
+```
+run px4 with gazebo using the default vtol model
+```bash
+sudo make px4_sitl gazebo_standard_vtol
+```
+Use mavproxy to split the mavlink signal into two streams on ports 14550 and 14551.
+```bash
+mavproxy.py --master=udp:127.0.0.1:14550 --out=udp:127.0.0.1:14550 --out=udp:127.0.0.1:14551 
+```
+run QGround control
+```bash
+./Downloads/QGroundControl.AppImage
+```
+navigate to the Clark-Aerospace-Interop directory and build and run our custom interop client.
+```bash
+cd Document/Clark-Aeropspace-Interop 
+./my_client.sh build
+./my_client.sh run
+```
+
+## Userfull interop client cheat sheet
+from the interop client run this command to get a mission from the interop server.
+```bash
+./tools/interop_cli.py --url http://127.0.0.1:8000 --username testuser mission --mission_id 1
+```
+for drone_cli.py
+```bash
+./tools/drone_cli.py --url udp://:14540 load_mission --mission_id 1 --interop_url http://127.0.0.1:8000 --interop_username testuser --interop_password testpass
+```
+
+## Comand syntax for drone_cli.py command line tool
+The drone_cli.py tool allways requires the devices url and then a option potentially followed by more arguments.
+```bash
+./tools/drone_cli.py --url udp://:14540 mission
+```
+
+## Current Task
+Add a function to interop_cli.py that gets a mission from the server and has the connected drone execute it.
+
+### Old tasks
+~~Create a python script that will send a mavlink mission item to the drone.
+Currently send_mission.py contains a script that makes the drone take of and them imidiatly land again.~~
+
+
+
+
+
+
 # AUVSI SUAS Interoperability
 
 [![Build Status](https://travis-ci.org/auvsi-suas/interop.svg)](https://travis-ci.org/auvsi-suas/interop)

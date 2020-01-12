@@ -8,3 +8,4 @@ pymavlink<=2.2.10
 pyserial
 requests
 mavsdk
+nose2
