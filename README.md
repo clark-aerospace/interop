@@ -14,7 +14,7 @@ start the interop test server
 ```
 run px4 with gazebo using the default vtol model
 ```bash
-sudo make px4_sitl gazebo_standard_vtol
+make px4_sitl gazebo_standard_vtol
 ```
 Use mavproxy to split the mavlink signal into two streams on ports 14550 and 14551.
 ```bash

@@ -59,8 +59,8 @@ class DroneClient():
         termination_task = asyncio.ensure_future(self.observe_is_in_air())
 
         mission_items = []
-        mission_items.append(MissionItem(47.398039859999997,
-                                        8.5455725400000002,
+        mission_items.append(MissionItem(38.1446916666667,
+                                        -76.4279944444445,
                                         25,
                                         10,
                                         True,
@@ -69,26 +69,26 @@ class DroneClient():
                                         MissionItem.CameraAction.NONE,
                                         float('nan'),
                                         float('nan')))
-        mission_items.append(MissionItem(47.398036222362471,
-                                        8.5450146439425509,
-                                        25,
-                                        10,
-                                        True,
-                                        float('nan'),
-                                        float('nan'),
-                                        MissionItem.CameraAction.NONE,
-                                        float('nan'),
-                                        float('nan')))
-        mission_items.append(MissionItem(47.397825620791885,
-                                        8.5450092830163271,
-                                        25,
-                                        10,
-                                        True,
-                                        float('nan'),
-                                        float('nan'),
-                                        MissionItem.CameraAction.NONE,
-                                        float('nan'),
-                                        float('nan')))
+        # mission_items.append(MissionItem(47.398036222362471,
+        #                                 8.5450146439425509,
+        #                                 25,
+        #                                 10,
+        #                                 True,
+        #                                 float('nan'),
+        #                                 float('nan'),
+        #                                 MissionItem.CameraAction.NONE,
+        #                                 float('nan'),
+        #                                 float('nan')))
+        # mission_items.append(MissionItem(47.397825620791885,
+        #                                 8.5450092830163271,
+        #                                 25,
+        #                                 10,
+        #                                 True,
+        #                                 float('nan'),
+        #                                 float('nan'),
+        #                                 MissionItem.CameraAction.NONE,
+        #                                 float('nan'),
+        #                                 float('nan')))
 
         await self.drone.mission.set_return_to_launch_after_mission(True)
 
